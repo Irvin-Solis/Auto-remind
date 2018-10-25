@@ -2,12 +2,13 @@ const { Application } = require('probot')
 // Requiring our app implementation
 const myProbotApp = require('..')
 
-const issuesOpenedPayload = require('./fixtures/issues.opened.json')
+const pullRequestOpenedEvent = require('./fixtures/pull-request-opened.json')
 
-test('that we can run tests', () => {
-  // your real tests go here
-  expect(1 + 2 + 3).toBe(6)
-})
+const config = {
+  content: Buffer.from(
+    "pullRequestOpened: Messege "
+  ).toString("base64")
+}
 
 describe('My Probot app', () => {
   let app, github
@@ -18,25 +19,48 @@ describe('My Probot app', () => {
     app.load(myProbotApp)
     // This is an easy way to mock out the GitHub API
     github = {
-      issues: {
-        createComment: jest.fn().mockReturnValue(Promise.resolve({}))
-      }
-    }
+      repos: {
+        getContent: () =>
+          Promise.resolve({
+            data:config
+          })
+        }
     // Passes the mocked out GitHub API into out app instance
     app.auth = () => Promise.resolve(github)
+    app.load(plugin)
   })
 
-  test('creates a comment when an issue is opened', async () => {
-    // Simulates delivery of an issues.opened webhook
-    await app.receive({
-      name: 'issues.opened',
-      payload: issuesOpenedPayload
-    })
+  describe("pullRequests.opened", () => {
+    it("Reads `pullRequestOpened` from the `auto-remind.yml` and sends the value to github", async () => {
+      await app.receive({ event: "pull_request", payload: pullRequestOpenedEvent });
 
-    // This test passes if the code in your index.js file calls `context.github.issues.createComment`
-    expect(github.issues.createComment).toHaveBeenCalled()
-  })
-})
+      expect(github.issues.createComment).toHaveBeenCalledWith({
+        body: "My Message",
+        number: 19,
+        repo: undefined
+      });
+    });
+
+    it("does not create a new comment if the `pullRequestOpened` cannot be found in the config", async () => {
+      await app.receive({ event: "pull_request", payload: pullRequestOpenedEvent });
+
+      github = {
+        repos: {
+          getContent: () =>
+            Promise.resolve({
+              data: {
+                content: Buffer.from(`pullRequestOpened:\n  My Message`).toString("base64")
+              }
+            })
+        },
+        issues: {
+          createComment: jest.fn()
+        }
+      };
+      expect(github.issues.createComment).not.toHaveBeenCalled();
+    });
+  });
+});
 
 // For more information about testing with Jest see:
 // https://facebook.github.io/jest/
