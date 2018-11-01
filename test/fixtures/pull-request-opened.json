@@ -1,7 +1,6 @@
 {
   "action": "opened",
   "pull_request": {
-    "number": 19,
     "title": "New Pull Request",
     "user": {
       "login": "Irvin-Solis"
